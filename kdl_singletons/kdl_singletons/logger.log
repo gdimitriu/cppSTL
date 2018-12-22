@@ -1,0 +1,5 @@
+keyboardImpl setLoggerDevice
+displayImpl setLoggerDevice
+displayImpl destructor
+keyboardImpl destructor
+logImpl destructor

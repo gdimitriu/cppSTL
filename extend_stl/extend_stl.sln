@@ -1,0 +1,20 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2012
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "extend_stl", "extend_stl\extend_stl.vcxproj", "{CD7B3155-9118-41B7-A536-14B23D3FEC5B}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Win32 = Debug|Win32
+		Release|Win32 = Release|Win32
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{CD7B3155-9118-41B7-A536-14B23D3FEC5B}.Debug|Win32.ActiveCfg = Debug|Win32
+		{CD7B3155-9118-41B7-A536-14B23D3FEC5B}.Debug|Win32.Build.0 = Debug|Win32
+		{CD7B3155-9118-41B7-A536-14B23D3FEC5B}.Release|Win32.ActiveCfg = Release|Win32
+		{CD7B3155-9118-41B7-A536-14B23D3FEC5B}.Release|Win32.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

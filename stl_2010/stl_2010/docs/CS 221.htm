@@ -1,0 +1,1159 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0 Transitional//EN">
+<!-- saved from url=(0071)http://www.cs.uah.edu/~rcoleman/Common/CodeVault/Code/Code203_Tree.html -->
+<HTML><HEAD><META content="IE=5.0000" http-equiv="X-UA-Compatible">
+ <TITLE>CS 221</TITLE> 
+<META http-equiv="Content-Type" content="text/html; charset=windows-1252">
+<META name="GENERATOR" content="MSHTML 10.00.9200.16660"></HEAD> 
+<BODY background="CS%20221_files/ParchmentBgn.jpg" text="#522d25" bgcolor="#ffffff" 
+link="#0000ff" vlink="#ff8080">
+<HR size="4">
+
+<H1 align="center">A self-balancing AVL tree implemented in C++</H1>
+<HR size="4">
+<B>
+<CENTER><BIG>Header file for an AVL tree</BIG></CENTER></B> 
+<PRE>//==================================================================
+// Code203_Tree.h
+// Demonstration of an AVL tree which keeps the tree nodes in as
+//   near perfect balance as possible.
+// Author: Dr. Rick Coleman
+//==================================================================
+#ifndef CODE203_TREE_H
+#define CODE203_TREE_H
+
+#include &lt;iostream&gt;
+using namespace std;
+
+struct AVLTreeNode
+{
+   int key;
+   // Other data fields can be inserted here
+   AVLTreeNode *left;
+   AVLTreeNode *right;
+   AVLTreeNode *parent;
+   char balanceFactor;
+};
+
+class Code203_Tree
+{
+   private:
+      AVLTreeNode   *root;
+
+   public:
+      Code203_Tree();            // Constructor
+      ~Code203_Tree();           // Destructor
+      void Insert(AVLTreeNode *n);
+      void restoreAVL(AVLTreeNode *ancestor, AVLTreeNode *newNode);
+      void adjustBalanceFactors(AVLTreeNode *end, AVLTreeNode *start);
+      void rotateLeft(AVLTreeNode *n);
+      void rotateRight(AVLTreeNode *n);
+      void adjustLeftRight(AVLTreeNode *end, AVLTreeNode *start);
+      void adjustRightLeft(AVLTreeNode *end, AVLTreeNode *start);
+//    void Delete(int key);  // Not implemented yet
+      void PrintTree();
+   private:
+      void ClearTree(AVLTreeNode *n);
+      void Print(AVLTreeNode *n);
+};
+
+#endif
+</PRE>
+<HR size="4">
+<B>
+<CENTER><BIG>Implementation (.cpp) file for an AVL tree</BIG></CENTER></B> 
+<PRE>//==================================================================
+// Code203_Tree.cpp
+// Demonstration of an AVL tree which keeps the tree nodes in as
+//   near perfect balance as possible.
+// Author: Dr. Rick Coleman
+// Date: January 2007
+//==================================================================
+#include "Code203_Tree.h"
+
+using namespace std;
+
+//------------------------------------------------------------------
+// Default constructor
+//------------------------------------------------------------------
+Code203_Tree::Code203_Tree()
+{
+   root = NULL;   // Initialize root to NULL
+}
+
+//------------------------------------------------------------------
+// Class destructor
+//------------------------------------------------------------------
+Code203_Tree::~Code203_Tree()
+{
+   // Start recursive destruction of tree
+   ClearTree(root);
+}
+
+//------------------------------------------------------------------
+// ClearTree()
+// Recursively delete all node in the tree.
+//------------------------------------------------------------------
+void Code203_Tree::ClearTree(AVLTreeNode *n)
+{
+   if(n != NULL)
+   {
+      ClearTree(n-&gt;left);   // Recursively clear the left sub-tree
+      ClearTree(n-&gt;right);   // Recursively clear the right sub-tree
+      delete n;         // Delete this node
+   }
+}
+
+//------------------------------------------------------------------
+// Insert()
+// Insert a new node into the tree then restore the AVL property.
+// Assumes that all three pointers (left, right, and parent) have
+//  already been set to NULL in the new node
+//------------------------------------------------------------------
+void Code203_Tree::Insert(AVLTreeNode *newNode)
+{
+   AVLTreeNode *temp, *back, *ancestor;
+
+   temp = root;
+   back = NULL;
+   ancestor = NULL;
+
+   // Check for empty tree first
+   if(root == NULL)
+   {
+      root = newNode;
+      return;
+   }
+   // Tree is not empty so search for place to insert
+   while(temp != NULL) // Loop till temp falls out of the tree 
+   {
+      back = temp;
+      // Mark ancestor that will be out of balance after
+      //   this node is inserted
+      if(temp-&gt;balanceFactor != '=')  
+         ancestor = temp;
+      if(newNode-&gt;key &lt; temp-&gt;key)
+         temp = temp-&gt;left;
+      else
+         temp = temp-&gt;right;
+   }
+   // temp is now NULL
+   // back points to parent node to attach newNode to
+   // ancestor points to most recent out of balance ancestor
+
+   newNode-&gt;parent = back;   // Set parent
+   if(newNode-&gt;key &lt; back-&gt;key)  // Insert at left
+   {
+      back-&gt;left = newNode;
+   }
+   else     // Insert at right
+   {
+      back-&gt;right = newNode;
+   }
+
+   // Now call function to restore the tree's AVL property
+   restoreAVL(ancestor, newNode);
+}
+
+//------------------------------------------------------------------
+// restoreAVL() 
+// Restore the AVL quality after inserting a new node.
+// @param ancestor – most recent node back up the tree that is
+//            now out of balance.
+// @param newNode– the newly inserted node.
+//------------------------------------------------------------------
+void Code203_Tree::restoreAVL(AVLTreeNode *ancestor, AVLTreeNode *newNode)
+{
+   //--------------------------------------------------------------------------------
+   // Case 1: ancestor is NULL, i.e. balanceFactor of all ancestors' is '='
+   //--------------------------------------------------------------------------------
+   if(ancestor == NULL)
+   {
+      if(newNode-&gt;key &lt; root-&gt;key)       // newNode inserted to left of root
+         root-&gt;balanceFactor = 'L';
+      else 
+         root-&gt;balanceFactor = 'R';   // newNode inserted to right of root
+      // Adjust the balanceFactor for all nodes from newNode back up to root
+      adjustBalanceFactors(root, newNode);
+   }
+
+   //--------------------------------------------------------------------------------
+   // Case 2: Insertion in opposite subtree of ancestor's balance factor, i.e.
+   //  ancestor.balanceFactor = 'L' AND  Insertion made in ancestor's right subtree
+   //     OR
+   //  ancestor.balanceFactor = 'R' AND  Insertion made in ancestor's left subtree
+   //--------------------------------------------------------------------------------
+   else if(((ancestor-&gt;balanceFactor == 'L') &amp;&amp; (newNode-&gt;key &gt; ancestor-&gt;key)) ||
+        ((ancestor-&gt;balanceFactor == 'R') &amp;&amp; (newNode-&gt;key &lt; ancestor-&gt;key)))
+   {
+      ancestor-&gt;balanceFactor = '=';
+      // Adjust the balanceFactor for all nodes from newNode back up to ancestor
+      adjustBalanceFactors(ancestor, newNode);
+   }
+   //--------------------------------------------------------------------------------
+   // Case 3: ancestor.balanceFactor = 'R' and the node inserted is
+   //      in the right subtree of ancestor's right child
+   //--------------------------------------------------------------------------------
+   else if((ancestor-&gt;balanceFactor == 'R') &amp;&amp; (newNode-&gt;key &gt; ancestor-&gt;right-&gt;key))
+   {
+      ancestor-&gt;balanceFactor = '='; // Reset ancestor's balanceFactor
+      rotateLeft(ancestor);       // Do single left rotation about ancestor
+      // Adjust the balanceFactor for all nodes from newNode back up to ancestor's parent
+      adjustBalanceFactors(ancestor-&gt;parent, newNode);
+   }
+
+   //--------------------------------------------------------------------------------
+   // Case 4: ancestor.balanceFactor is 'L' and the node inserted is
+   //      in the left subtree of ancestor's left child
+   //--------------------------------------------------------------------------------
+   else if((ancestor-&gt;balanceFactor == 'L') &amp;&amp; (newNode-&gt;key &lt; ancestor-&gt;left-&gt;key))
+   {
+      ancestor-&gt;balanceFactor = '='; // Reset ancestor's balanceFactor
+      rotateRight(ancestor);       // Do single right rotation about ancestor
+      // Adjust the balanceFactor for all nodes from newNode back up to ancestor's parent
+      adjustBalanceFactors(ancestor-&gt;parent, newNode);
+   }
+
+   //--------------------------------------------------------------------------------
+   // Case 5: ancestor.balanceFactor is 'L' and the node inserted is
+   //      in the right subtree of ancestor's left child
+   //--------------------------------------------------------------------------------
+   else if((ancestor-&gt;balanceFactor == 'L') &amp;&amp; (newNode-&gt;key &gt; ancestor-&gt;left-&gt;key))
+   {
+      // Perform double right rotation (actually a left followed by a right)
+      rotateLeft(ancestor-&gt;left);
+      rotateRight(ancestor);
+      // Adjust the balanceFactor for all nodes from newNode back up to ancestor
+      adjustLeftRight(ancestor, newNode);
+   }
+
+   //--------------------------------------------------------------------------------
+   // Case 6: ancestor.balanceFactor is 'R' and the node inserted is 
+   //      in the left subtree of ancestor's right child
+   //--------------------------------------------------------------------------------
+   else
+   {
+      // Perform double left rotation (actually a right followed by a left)
+          rotateRight(ancestor-&gt;right);
+          rotateLeft(ancestor);
+          adjustRightLeft(ancestor, newNode);
+   }
+}
+
+//------------------------------------------------------------------
+// Adjust the balance factor in all nodes from the inserted node's
+//   parent back up to but NOT including a designated end node.
+// @param end– last node back up the tree that needs adjusting
+// @param start – node just inserted 
+//------------------------------------------------------------------
+void Code203_Tree::adjustBalanceFactors(AVLTreeNode *end, AVLTreeNode *start)
+{
+    AVLTreeNode *temp = start-&gt;parent; // Set starting point at start's parent
+    while(temp != end)
+    {
+        if(start-&gt;key &lt; temp-&gt;key)
+            temp-&gt;balanceFactor = 'L';
+        else
+            temp-&gt;balanceFactor = 'R';
+        temp = temp-&gt;parent;
+    } // end while
+}
+
+//------------------------------------------------------------------
+// rotateLeft()
+// Perform a single rotation left about n.  This will rotate n's
+//   parent to become n's left child.  Then n's left child will
+//   become the former parent's right child.
+//------------------------------------------------------------------
+void Code203_Tree::rotateLeft(AVLTreeNode *n)
+{
+   AVLTreeNode *temp = n-&gt;right;   //Hold pointer to n's right child
+   n-&gt;right = temp-&gt;left;      // Move temp 's left child to right child of n
+   if(temp-&gt;left != NULL)      // If the left child does exist
+      temp -&gt;left-&gt;parent = n;// Reset the left child's parent
+   if(n-&gt;parent == NULL)       // If n was the root
+   {
+      root = temp;      // Make temp the new root
+      temp-&gt;parent = NULL;   // Root has no parent
+   }
+   else if(n-&gt;parent-&gt;left == n) // If n was the left child of its' parent
+      n-&gt;parent-&gt;left = temp;   // Make temp the new left child
+   else               // If n was the right child of its' parent
+      n-&gt;parent-&gt;right = temp;// Make temp the new right child
+
+   temp-&gt;left = n;         // Move n to left child of temp
+   n-&gt;parent = temp;         // Reset n's parent
+}
+
+//------------------------------------------------------------------
+// rotateRight()
+// Perform a single rotation right about n.  This will rotate n's
+//   parent to become n's right child.  Then n's right child will
+//   become the former parent's left child.
+//------------------------------------------------------------------
+void Code203_Tree::rotateRight(AVLTreeNode *n)
+{
+   AVLTreeNode *temp = n-&gt;left;   //Hold pointer to temp
+   n-&gt;left = temp-&gt;right;      // Move temp's right child to left child of n
+   if(temp-&gt;right != NULL)      // If the right child does exist
+      temp-&gt;right-&gt;parent = n;// Reset right child's parent
+   if(n-&gt;parent == NULL)       // If n was root
+   {
+      root = temp;      // Make temp the root
+      temp-&gt;parent = NULL;   // Root has no parent
+   }
+   else if(n-&gt;parent-&gt;left == n) // If was the left child of its' parent
+      n-&gt;parent-&gt;left = temp;   // Make temp the new left child
+   else               // If n was the right child of its' parent
+      n-&gt;parent-&gt;right = temp;// Make temp the new right child
+
+   temp-&gt;right = n;         // Move n to right child of temp
+   n-&gt;parent = temp;         // Reset n's parent
+}
+
+//------------------------------------------------------------------
+// adjustLeftRight()
+// @param end- last node back up the tree that needs adjusting
+// @param start - node just inserted 
+//------------------------------------------------------------------
+void Code203_Tree::adjustLeftRight(AVLTreeNode *end, AVLTreeNode *start)
+{
+    if(end == root)
+        end-&gt;balanceFactor = '=';
+    else if(start-&gt;key &lt; end-&gt;parent-&gt;key)
+    {
+        end-&gt;balanceFactor = 'R';
+        adjustBalanceFactors(end-&gt;parent-&gt;left, start);
+    }
+    else
+    {
+        end-&gt;balanceFactor = '=';
+        end-&gt;parent-&gt;left-&gt;balanceFactor = 'L';
+        adjustBalanceFactors(end, start);
+    }
+}
+
+//------------------------------------------------------------------
+// adjustRightLeft
+// @param end- last node back up the tree that needs adjusting
+// @param start - node just inserted 
+//------------------------------------------------------------------
+void Code203_Tree::adjustRightLeft(AVLTreeNode *end, AVLTreeNode *start)
+{
+    if(end == root)
+        end-&gt;balanceFactor = '=';
+    else if(start-&gt;key &gt; end-&gt;parent-&gt;key)
+    {
+        end-&gt;balanceFactor = 'L';
+        adjustBalanceFactors(end-&gt;parent-&gt;right, start);
+    }
+    else
+    {
+        end-&gt;balanceFactor = '=';
+        end-&gt;parent-&gt;right-&gt;balanceFactor = 'R';
+        adjustBalanceFactors(end, start);
+    }
+}
+
+//------------------------------------------------------------------
+// PrintTree()
+// Intiate a recursive traversal to print the tree
+//------------------------------------------------------------------
+void Code203_Tree::PrintTree()
+{
+   cout &lt;&lt; "\nPrinting the tree...\n";
+   cout &lt;&lt; "Root Node: " &lt;&lt; root-&gt;key &lt;&lt; " balanceFactor is " &lt;&lt;
+      root-&gt;balanceFactor &lt;&lt; "\n\n";
+   Print(root);
+}
+
+//------------------------------------------------------------------
+// Print()
+// Perform a recursive traversal to print the tree
+//------------------------------------------------------------------
+void Code203_Tree::Print(AVLTreeNode *n)
+{
+   if(n != NULL)
+   {
+      cout&lt;&lt;"Node: " &lt;&lt; n-&gt;key &lt;&lt; " balanceFactor is " &lt;&lt;
+         n-&gt;balanceFactor &lt;&lt; "\n";
+      if(n-&gt;left != NULL)
+      {
+         cout&lt;&lt;"\t moving left\n";
+         Print(n-&gt;left);
+         cout&lt;&lt;"Returning to Node" &lt;&lt; n-&gt;key &lt;&lt; " from its' left subtree\n";
+      }
+      else
+      {
+         cout&lt;&lt;"\t left subtree is empty\n";
+      }
+      cout&lt;&lt;"Node: " &lt;&lt; n-&gt;key &lt;&lt; " balanceFactor is " &lt;&lt;
+         n-&gt;balanceFactor &lt;&lt; "\n";
+      if(n-&gt;right != NULL)
+      {
+         cout&lt;&lt;"\t moving right\n";
+         Print(n-&gt;right);
+         cout&lt;&lt;"Returning to Node" &lt;&lt; n-&gt;key &lt;&lt; " from its' right subtree\n";
+      }
+      else
+      {
+         cout&lt;&lt;"\t right subtree is empty\n";
+      }
+   }
+}
+</PRE>
+<HR size="4">
+<B>
+<CENTER><BIG>Main file used to test the AVL tree</BIG></CENTER></B> 
+<PRE>//==================================================================
+// AVLTreeMain.cpp
+// Demonstration of an AVL tree which keeps the tree nodes in as
+//   near perfect balance as possible.
+// Author: Dr. Rick Coleman
+// Date: January 2007
+//==================================================================
+#include "Code203_Tree.h"
+#include &lt;iostream&gt;
+
+using namespace std;
+
+AVLTreeNode *createNewNode(int key);
+
+int main()
+{
+   Code203_Tree *theAVLTree;
+   char ans[32];
+
+   cout &lt;&lt; "Ready to test AVL trees. Press Enter to start.\n\n";
+   gets(ans);
+
+   // Test each case by adding some nodes to the tree then
+   //  printing the tree after each insertion
+
+   // Create a tree and test case 1
+   theAVLTree = new Code203_Tree();
+   cout&lt;&lt; "-----------------------------------------------\n";
+   cout&lt;&lt; "TESTING CASE 1\n\n";
+   // Add 50
+   cout &lt;&lt; "\nAdding Node 50\n";
+   theAVLTree-&gt;Insert(createNewNode(50));
+   theAVLTree-&gt;PrintTree();
+   // Add 20
+   cout &lt;&lt; "\nAdding Node 20\n";
+   theAVLTree-&gt;Insert(createNewNode(20));
+   theAVLTree-&gt;PrintTree();
+   // Add 70
+   cout &lt;&lt; "\nAdding Node 70\n";
+   theAVLTree-&gt;Insert(createNewNode(70));
+   theAVLTree-&gt;PrintTree();
+   // Add 30
+   cout &lt;&lt; "\nAdding Node 30\n";
+   theAVLTree-&gt;Insert(createNewNode(30));
+   theAVLTree-&gt;PrintTree();
+   // Add 10
+   cout &lt;&lt; "\nAdding Node 10\n";
+   theAVLTree-&gt;Insert(createNewNode(10));
+   theAVLTree-&gt;PrintTree();
+   // Add 90
+   cout &lt;&lt; "\nAdding Node 90\n";
+   theAVLTree-&gt;Insert(createNewNode(90));
+   theAVLTree-&gt;PrintTree();
+   // Add 60
+   cout &lt;&lt; "\nAdding Node 60\n";
+   theAVLTree-&gt;Insert(createNewNode(60));
+   theAVLTree-&gt;PrintTree();
+   cout&lt;&lt; "\n***** Adding Node to trigger test of case 1\n";
+   // Add 55
+   cout &lt;&lt; "\nAdding Node 55\n";
+   theAVLTree-&gt;Insert(createNewNode(55));
+   theAVLTree-&gt;PrintTree();
+   cout&lt;&lt; "\nEND TESTING CASE 1\n\n";
+   delete theAVLTree;
+   cout&lt;&lt; "-----------------------------------------------\n";
+   cout&lt;&lt; "-----------------------------------------------\n";
+
+   cout &lt;&lt; "\nPress Enter to start the next test.\n\n";
+   gets(ans);
+
+   // Create a tree and test case 2
+   theAVLTree = new Code203_Tree();
+   cout&lt;&lt; "-----------------------------------------------\n";
+   cout&lt;&lt; "TESTING CASE 2\n\n";
+   // Add 50
+   cout &lt;&lt; "\nAdding Node 50\n";
+   theAVLTree-&gt;Insert(createNewNode(50));
+   theAVLTree-&gt;PrintTree();
+   // Add 20
+   cout &lt;&lt; "\nAdding Node 20\n";
+   theAVLTree-&gt;Insert(createNewNode(20));
+   theAVLTree-&gt;PrintTree();
+   // Add 70
+   cout &lt;&lt; "\nAdding Node 70\n";
+   theAVLTree-&gt;Insert(createNewNode(70));
+   theAVLTree-&gt;PrintTree();
+   // Add 30
+   cout &lt;&lt; "\nAdding Node 30\n";
+   theAVLTree-&gt;Insert(createNewNode(30));
+   theAVLTree-&gt;PrintTree();
+   // Add 10
+   cout &lt;&lt; "\nAdding Node 10\n";
+   theAVLTree-&gt;Insert(createNewNode(10));
+   theAVLTree-&gt;PrintTree();
+   // Add 90
+   cout &lt;&lt; "\nAdding Node 90\n";
+   theAVLTree-&gt;Insert(createNewNode(90));
+   theAVLTree-&gt;PrintTree();
+   // Add 60
+   cout &lt;&lt; "\nAdding Node 60\n";
+   theAVLTree-&gt;Insert(createNewNode(60));
+   theAVLTree-&gt;PrintTree();
+   // Add 55
+   cout &lt;&lt; "\nAdding Node 55\n";
+   theAVLTree-&gt;Insert(createNewNode(55));
+   theAVLTree-&gt;PrintTree();
+   cout&lt;&lt; "\n***** Adding Node to trigger test of case 2\n";
+   // Add 28
+   cout &lt;&lt; "\nAdding Node 28\n";
+   theAVLTree-&gt;Insert(createNewNode(28));
+   theAVLTree-&gt;PrintTree();
+   cout&lt;&lt; "\nEND TESTING CASE 2\n\n";
+   delete theAVLTree;
+   cout&lt;&lt; "-----------------------------------------------\n";
+   cout&lt;&lt; "-----------------------------------------------\n";
+
+   cout &lt;&lt; "\nPress Enter to start the next test.\n\n";
+   gets(ans);
+
+   // Create a tree and test case 3
+   theAVLTree = new Code203_Tree();
+   cout&lt;&lt; "-----------------------------------------------\n";
+   cout&lt;&lt; "TESTING CASE 3\n\n";
+   // Add 50
+   cout &lt;&lt; "\nAdding Node 50\n";
+   theAVLTree-&gt;Insert(createNewNode(50));
+   theAVLTree-&gt;PrintTree();
+   // Add 20
+   cout &lt;&lt; "\nAdding Node 20\n";
+   theAVLTree-&gt;Insert(createNewNode(20));
+   theAVLTree-&gt;PrintTree();
+   // Add 70
+   cout &lt;&lt; "\nAdding Node 70\n";
+   theAVLTree-&gt;Insert(createNewNode(70));
+   theAVLTree-&gt;PrintTree();
+   // Add 10
+   cout &lt;&lt; "\nAdding Node 10\n";
+   theAVLTree-&gt;Insert(createNewNode(10));
+   theAVLTree-&gt;PrintTree();
+   // Add 90
+   cout &lt;&lt; "\nAdding Node 90\n";
+   theAVLTree-&gt;Insert(createNewNode(90));
+   theAVLTree-&gt;PrintTree();
+   // Add 60
+   cout &lt;&lt; "\nAdding Node 60\n";
+   theAVLTree-&gt;Insert(createNewNode(60));
+   theAVLTree-&gt;PrintTree();
+   // Add 80
+   cout &lt;&lt; "\nAdding Node 80\n";
+   theAVLTree-&gt;Insert(createNewNode(80));
+   theAVLTree-&gt;PrintTree();
+   // Add 98
+   cout &lt;&lt; "\nAdding Node 98\n";
+   theAVLTree-&gt;Insert(createNewNode(98));
+   theAVLTree-&gt;PrintTree();
+   cout&lt;&lt; "\n***** Adding Node to trigger test of case 3\n";
+   // Add 93
+   cout &lt;&lt; "\nAdding Node 93\n";
+   theAVLTree-&gt;Insert(createNewNode(93));
+   theAVLTree-&gt;PrintTree();
+   cout&lt;&lt; "\nEND TESTING CASE 3\n\n";
+   delete theAVLTree;
+   cout&lt;&lt; "-----------------------------------------------\n";
+   cout&lt;&lt; "-----------------------------------------------\n";
+
+   cout &lt;&lt; "\nPress Enter to start the next test.\n\n";
+   gets(ans);
+
+   // Create a tree and test case 4
+   theAVLTree = new Code203_Tree();
+   cout&lt;&lt; "-----------------------------------------------\n";
+   cout&lt;&lt; "TESTING CASE 4\n\n";
+   // Add 50
+   cout &lt;&lt; "\nAdding Node 50\n";
+   theAVLTree-&gt;Insert(createNewNode(50));
+   theAVLTree-&gt;PrintTree();
+   // Add 20
+   cout &lt;&lt; "\nAdding Node 20\n";
+   theAVLTree-&gt;Insert(createNewNode(20));
+   theAVLTree-&gt;PrintTree();
+   // Add 70
+   cout &lt;&lt; "\nAdding Node 70\n";
+   theAVLTree-&gt;Insert(createNewNode(70));
+   theAVLTree-&gt;PrintTree();
+   // Add 10
+   cout &lt;&lt; "\nAdding Node 10\n";
+   theAVLTree-&gt;Insert(createNewNode(10));
+   theAVLTree-&gt;PrintTree();
+   // Add 30
+   cout &lt;&lt; "\nAdding Node 30\n";
+   theAVLTree-&gt;Insert(createNewNode(30));
+   theAVLTree-&gt;PrintTree();
+   // Add 90
+   cout &lt;&lt; "\nAdding Node 90\n";
+   theAVLTree-&gt;Insert(createNewNode(90));
+   theAVLTree-&gt;PrintTree();
+   // Add 60
+   cout &lt;&lt; "\nAdding Node 60\n";
+   theAVLTree-&gt;Insert(createNewNode(60));
+   theAVLTree-&gt;PrintTree();
+   // Add 5
+   cout &lt;&lt; "\nAdding Node 5\n";
+   theAVLTree-&gt;Insert(createNewNode(5));
+   theAVLTree-&gt;PrintTree();
+   // Add 15
+   cout &lt;&lt; "\nAdding Node 15\n";
+   theAVLTree-&gt;Insert(createNewNode(15));
+   theAVLTree-&gt;PrintTree();
+   // Add 25
+   cout &lt;&lt; "\nAdding Node 25\n";
+   theAVLTree-&gt;Insert(createNewNode(25));
+   theAVLTree-&gt;PrintTree();
+   // Add 35
+   cout &lt;&lt; "\nAdding Node 35\n";
+   theAVLTree-&gt;Insert(createNewNode(35));
+   theAVLTree-&gt;PrintTree();
+   cout&lt;&lt; "\n***** Adding Node to trigger test of case 4\n";
+   // Add 13
+   cout &lt;&lt; "\nAdding Node 13\n";
+   theAVLTree-&gt;Insert(createNewNode(13));
+   theAVLTree-&gt;PrintTree();
+   cout&lt;&lt; "\nEND TESTING CASE 4\n\n";
+   delete theAVLTree;
+   cout&lt;&lt; "-----------------------------------------------\n";
+   cout&lt;&lt; "-----------------------------------------------\n";
+
+   cout &lt;&lt; "\nPress Enter to start the next test.\n\n";
+   gets(ans);
+
+   // Create a tree and test case 5
+   theAVLTree = new Code203_Tree();
+   cout&lt;&lt; "-----------------------------------------------\n";
+   cout&lt;&lt; "TESTING CASE 5\n\n";
+   // Add 50
+   cout &lt;&lt; "\nAdding Node 50\n";
+   theAVLTree-&gt;Insert(createNewNode(50));
+   theAVLTree-&gt;PrintTree();
+   // Add 20
+   cout &lt;&lt; "\nAdding Node 20\n";
+   theAVLTree-&gt;Insert(createNewNode(20));
+   theAVLTree-&gt;PrintTree();
+   // Add 90
+   cout &lt;&lt; "\nAdding Node 90\n";
+   theAVLTree-&gt;Insert(createNewNode(90));
+   theAVLTree-&gt;PrintTree();
+   // Add 10
+   cout &lt;&lt; "\nAdding Node 10\n";
+   theAVLTree-&gt;Insert(createNewNode(10));
+   theAVLTree-&gt;PrintTree();
+   // Add 40
+   cout &lt;&lt; "\nAdding Node 40\n";
+   theAVLTree-&gt;Insert(createNewNode(40));
+   theAVLTree-&gt;PrintTree();
+   // Add 70
+   cout &lt;&lt; "\nAdding Node 70\n";
+   theAVLTree-&gt;Insert(createNewNode(70));
+   theAVLTree-&gt;PrintTree();
+   // Add 100
+   cout &lt;&lt; "\nAdding Node 100\n";
+   theAVLTree-&gt;Insert(createNewNode(100));
+   theAVLTree-&gt;PrintTree();
+   // Add 5
+   cout &lt;&lt; "\nAdding Node 5\n";
+   theAVLTree-&gt;Insert(createNewNode(5));
+   theAVLTree-&gt;PrintTree();
+   // Add 15
+   cout &lt;&lt; "\nAdding Node 15\n";
+   theAVLTree-&gt;Insert(createNewNode(15));
+   theAVLTree-&gt;PrintTree();
+   // Add 30
+   cout &lt;&lt; "\nAdding Node 30\n";
+   theAVLTree-&gt;Insert(createNewNode(30));
+   theAVLTree-&gt;PrintTree();
+   // Add 45
+   cout &lt;&lt; "\nAdding Node 45\n";
+   theAVLTree-&gt;Insert(createNewNode(45));
+   theAVLTree-&gt;PrintTree();
+   cout&lt;&lt; "\n***** Adding Node to trigger test of case 5\n";
+   // Add 35
+   cout &lt;&lt; "\nAdding Node 35\n";
+   theAVLTree-&gt;Insert(createNewNode(35));
+   theAVLTree-&gt;PrintTree();
+   cout&lt;&lt; "\nEND TESTING CASE 5\n\n";
+   delete theAVLTree;
+   cout&lt;&lt; "-----------------------------------------------\n";
+   cout&lt;&lt; "-----------------------------------------------\n";
+
+   cout &lt;&lt; "\nPress Enter to start the next test.\n\n";
+   gets(ans);
+
+   // Create a tree and test case 6
+   theAVLTree = new Code203_Tree();
+   cout&lt;&lt; "-----------------------------------------------\n";
+   cout&lt;&lt; "TESTING CASE 6\n\n";
+   // Add 50
+   cout &lt;&lt; "\nAdding Node 50\n";
+   theAVLTree-&gt;Insert(createNewNode(50));
+   theAVLTree-&gt;PrintTree();
+   // Add 20
+   cout &lt;&lt; "\nAdding Node 20\n";
+   theAVLTree-&gt;Insert(createNewNode(20));
+   theAVLTree-&gt;PrintTree();
+   // Add 80
+   cout &lt;&lt; "\nAdding Node 80\n";
+   theAVLTree-&gt;Insert(createNewNode(80));
+   theAVLTree-&gt;PrintTree();
+   // Add 70
+   cout &lt;&lt; "\nAdding Node 70\n";
+   theAVLTree-&gt;Insert(createNewNode(70));
+   theAVLTree-&gt;PrintTree();
+   // Add 90
+   cout &lt;&lt; "\nAdding Node 90\n";
+   theAVLTree-&gt;Insert(createNewNode(90));
+   theAVLTree-&gt;PrintTree();
+   cout&lt;&lt; "\n***** Adding Node to trigger test of case 6\n";
+   // Add 75
+   cout &lt;&lt; "\nAdding Node 75\n";
+   theAVLTree-&gt;Insert(createNewNode(75));
+   theAVLTree-&gt;PrintTree();
+   cout&lt;&lt; "\nEND TESTING CASE 6\n\n";
+   delete theAVLTree;
+   cout&lt;&lt; "-----------------------------------------------\n";
+   cout&lt;&lt; "-----------------------------------------------\n";
+
+   cout &lt;&lt; "\nAll testing complete.\n";
+   cout &lt;&lt; "\nPress Enter to terminate the application.\n\n";
+   gets(ans);
+}
+
+//---------------------------------------------
+// Create a new tree node with the given key
+//---------------------------------------------
+AVLTreeNode *createNewNode(int key)
+{
+   AVLTreeNode *temp = new AVLTreeNode();
+   temp-&gt;key = key;
+   temp-&gt;left = NULL;
+   temp-&gt;right = NULL;
+   temp-&gt;parent = NULL;
+   temp-&gt;balanceFactor = '=';
+   return temp;
+} 
+</PRE>
+<HR size="4">
+<B>
+<CENTER><BIG>Results from Testing the AVL Tree</BIG></CENTER></B> Below is a 
+series of images illustrating the state of the tree after inserting nodes in the 
+order given in AVLTreeMain.cpp. Note the effects when the key node is inserted 
+in each of the six cases.  The first diagram shows the appearance of the tree 
+after the key node is added and before the rotations are applied.  The second 
+diagram shows how the tree looks after the rotations and adjustments to the 
+balanceFactor in each node have been applied.<BR><BR>
+<HR size="4">
+<B><BIG>Testing Case 1</BIG> - Ancestor is NULL, i.e. balanceFactor is '=' in
+	all of the predecessors</B> 
+<TABLE border="0">
+  <TBODY>
+  <TR>
+    <TD width="150">
+      <CENTER>			Step 1<BR>			Inserting Node 50			 </CENTER></TD>
+    <TD width="150">
+      <CENTER>			Step 2<BR>			Inserting Node 20			 </CENTER></TD>
+    <TD width="150">
+      <CENTER>			Step 3<BR>			Inserting Node 70			 </CENTER></TD>
+    <TD width="150">
+      <CENTER>			Step 4<BR>			Inserting Node 30			 </CENTER></TD>
+    <TD width="150">
+      <CENTER>			Step 5<BR>			Inserting Node 10			 </CENTER></TD></TR>
+  <TR>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case1_01.gif">
+      			 </CENTER></TD>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case1_02.gif">
+      			 </CENTER></TD>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case1_03.gif">
+      			 </CENTER></TD>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case1_04.gif">
+      			 </CENTER></TD>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case1_05.gif">
+      			 </CENTER></TD></TR>
+  <TR>
+    <TD colspan="5">
+      <CENTER>			&nbsp;			</CENTER></TD></TR>
+  <TR>
+    <TD>
+      <CENTER>			Step 6<BR>			Inserting Node 90			 </CENTER></TD>
+    <TD>
+      <CENTER>			Step 7<BR>			Inserting Node 60			 </CENTER></TD>
+    <TD>
+      <CENTER>			&nbsp;			</CENTER></TD>
+    <TD colspan="2">
+      <CENTER>			Step 8<BR>			Inserting Node 55			 </CENTER></TD></TR>
+  <TR>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case1_06.gif">
+      			 </CENTER></TD>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case1_07.gif">
+      			 </CENTER></TD>
+    <TD>
+      <CENTER>			Inserting Node 55<BR>			which will trigger<BR>			the test of 
+      Case 1.<BR>			All ancestors have a<BR>			balance factor of '='
+    			 </CENTER></TD>
+    <TD colspan="2">
+      <CENTER>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case1_08.gif">
+      			 </CENTER></CENTER></TD></TR></TBODY></TABLE>
+<HR size="4">
+<B><BIG>Testing Case 2</BIG> - Insertion made in the opposite subtree of	the 
+ancestor's balance factor, i.e.<BR>	&nbsp;&nbsp;&nbsp;&nbsp;
+	ancestor.balanceFactor = 'L' and insertion made in ancestor's right subtree<BR>
+	&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;OR<BR>
+	&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;	ancestor.balanceFactor = 'R' and insertion made 
+in ancestor's left subtree</B> 
+<TABLE border="0">
+  <TBODY>
+  <TR>
+    <TD width="120">
+      <CENTER>			Step 1-7<BR></CENTER></TD>
+    <TD width="300">
+      <CENTER>			Step 8<BR>			Inserting Node 55			 </CENTER></TD>
+    <TD width="160">
+      <CENTER>			&nbsp;			</CENTER></TD>
+    <TD width="300">
+      <CENTER>			Step 9<BR>			Inserting Node 28			 </CENTER></TD></TR>
+  <TR>
+    <TD>
+      <CENTER>			Same as for Case 1			 </CENTER></TD>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case2_08.gif">
+      			 </CENTER></TD>
+    <TD>
+      <CENTER>			Inserting Node 28<BR>			which will trigger<BR>			the test of 
+      Case 2<BR></CENTER></TD>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case2_09.gif">
+      			 </CENTER></TD></TR></TBODY></TABLE>Note: The diagrams above illustrate when 
+the ancestor (50 in this case) has a balanceFactor of 'R' and we insert a node 
+(28) into its' left subtree. If we had inserted last two nodes in reverse order 
+we would see the ancestor (50) having a balanceFactor of 'L' after inserting 28 
+then change to '=' after inserting 55 in the its' right subtree.  
+<HR size="4">
+<B><BIG>Testing Case 3</BIG> - Ancestor.balanceFactor = 'R' and node inserted is
+	in the right subtree of ancestor's right child.</B> 
+<TABLE border="0">
+  <TBODY>
+  <TR>
+    <TD width="150">
+      <CENTER>			Step 1-3<BR></CENTER></TD>
+    <TD width="250">
+      <CENTER>			Step 4<BR>			Inserting Node 10			 </CENTER></TD>
+    <TD width="250">
+      <CENTER>			Step 5<BR>			Inserting Node 90			 </CENTER></TD></TR>
+  <TR>
+    <TD>
+      <CENTER>			Same as for Case 1			 </CENTER></TD>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case3_04.gif">
+      			 </CENTER></TD>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case3_05.gif">
+      			 </CENTER></TD></TR>
+  <TR>
+    <TD colspan="3">
+      <CENTER>			&nbsp;			</CENTER></TD></TR>
+  <TR>
+    <TD>
+      <CENTER>			Step 6<BR>			Inserting Node 60			 </CENTER></TD>
+    <TD>
+      <CENTER>			Step 7<BR>			Inserting Node 80			 </CENTER></TD>
+    <TD colspan="2">
+      <CENTER>			Step 8<BR>			Inserting Node 98			 </CENTER></TD></TR>
+  <TR>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case3_06.gif">
+      			 </CENTER></TD>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case3_07.gif">
+      			 </CENTER></TD>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case3_08.gif">
+      			 </CENTER></TD></TR>
+  <TR>
+    <TD colspan="3">
+      <CENTER>			&nbsp;			</CENTER></TD></TR>
+  <TR>
+    <TD>
+      <CENTER>			Step 9a<BR>			Inserting Node 93			 </CENTER></TD>
+    <TD>
+      <CENTER>			&nbsp;			</CENTER></TD>
+    <TD colspan="2">
+      <CENTER>			Step 9b<BR>			Left rotation about 70			 </CENTER></TD></TR>
+  <TR>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case3_09a.gif">
+      			 </CENTER></TD>
+    <TD>
+      <CENTER>			Inserting Node 93<BR>			triggers the test of<BR>			Case 3 
+      resulting in a<BR>			single left rotation<BR>			about node 70 (the 
+      ancestor).			 </CENTER></TD>
+    <TD colspan="2">
+      <CENTER>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case3_09b.gif">
+      			 </CENTER></CENTER></TD></TR></TBODY></TABLE>Note that 70 is the ancestor and 
+we see 93 inserted as a node in the right subtree of ancestor's right child 
+(90).  It does not matter that 93 is inserted as a left child.  The same 
+rotation about 70 would occur if the node inserted had been 100 which would have 
+been a right child of 98. 
+<HR size="4">
+<B><BIG>Testing Case 4</BIG> - Ancestor.balanceFactor = 'L' and node inserted is
+	in the left subtree of ancestor's left child.</B> 
+<TABLE border="0">
+  <TBODY>
+  <TR>
+    <TD width="150">
+      <CENTER>			Step 1-4<BR></CENTER></TD>
+    <TD width="150">
+      <CENTER>			Step 5<BR>			Inserting Node 10			 </CENTER></TD>
+    <TD width="150">
+      <CENTER>			Step 6<BR>			Inserting Node 90			 </CENTER></TD>
+    <TD width="150">
+      <CENTER>			Step 7<BR>			Inserting Node 60			 </CENTER></TD></TR>
+  <TR>
+    <TD>
+      <CENTER>			Same as for Case 3			 </CENTER></TD>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case4_05.gif">
+      			 </CENTER></TD>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case4_06.gif">
+      			 </CENTER></TD>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case4_07.gif">
+      			 </CENTER></TD></TR>
+  <TR>
+    <TD colspan="4">
+      <CENTER>			&nbsp;			</CENTER></TD></TR></TBODY></TABLE>
+<TABLE border="0">
+  <TBODY>
+  <TR>
+    <TD width="200">
+      <CENTER>			Step 8<BR>			Inserting Node 5			 </CENTER></TD>
+    <TD width="200">
+      <CENTER>			Step 9<BR>			Inserting Node 15			 </CENTER></TD>
+    <TD width="200">
+      <CENTER>			Step 10<BR>			Inserting Node 25			 </CENTER></TD></TR>
+  <TR>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case4_08.gif">
+      			 </CENTER></TD>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case4_09.gif">
+      			 </CENTER></TD>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case4_10.gif">
+      			 </CENTER></TD></TR>
+  <TR>
+    <TD colspan="3">
+      <CENTER>			&nbsp;			</CENTER></TD></TR></TBODY></TABLE>
+<TABLE border="0">
+  <TBODY>
+  <TR>
+    <TD width="600">
+      <CENTER>			Step 11<BR>			Inserting Node 35			 </CENTER></TD></TR>
+  <TR>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case4_11.gif">
+      			 </CENTER></TD></TR></TBODY></TABLE>
+<TABLE border="0">
+  <TBODY>
+  <TR>
+    <TD width="250">
+      <CENTER>			Step 12a<BR>			Inserting Node 13			 </CENTER></TD>
+    <TD width="250">
+      <CENTER>			&nbsp;			</CENTER></TD>
+    <TD width="250">
+      <CENTER>			Step 12b<BR>			Right rotation about 20			 </CENTER></TD></TR>
+  <TR>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case4_12a.gif">
+      			 </CENTER></TD>
+    <TD>
+      <CENTER>			Inserting Node 13<BR>			triggers the test of<BR>			Case 4 
+      resulting in a<BR>			single right rotation<BR>			about node 20.
+      			 </CENTER></TD>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case4_12b.gif">
+      			 </CENTER></TD></TR>
+  <TR>
+    <TD colspan="3">
+      <CENTER>			&nbsp;			</CENTER></TD></TR></TBODY></TABLE>Note that 20 is the 
+ancestor and we see 13 inserted as a node in the left subtree of ancestor's left 
+child (10).  It does not matter that 13 is inserted as a left child.  The same 
+rotation about 20 would occur if the node inserted had been 14 which would have 
+been a right child of 15.  Case 4 is just the mirror image of case 3. 
+<HR size="4">
+<B><BIG>Testing Case 5</BIG> - Ancestor.balanceFactor = 'L' and node inserted is
+	in the right subtree of ancestor's left child.</B> 
+<TABLE border="0">
+  <TBODY>
+  <TR>
+    <TD width="150">
+      <CENTER>			Step 1-2<BR></CENTER></TD>
+    <TD width="150">
+      <CENTER>			Step 3<BR>			Inserting Node 90			 </CENTER></TD>
+    <TD width="150">
+      <CENTER>			Step 4<BR>			Inserting Node 10			 </CENTER></TD>
+    <TD width="150">
+      <CENTER>			Step 5<BR>			Inserting Node 40			 </CENTER></TD>
+    <TD width="150">
+      <CENTER>			Step 6<BR>			Inserting Node 70			 </CENTER></TD></TR>
+  <TR>
+    <TD>
+      <CENTER>			Same as for Case 1			 </CENTER></TD>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case5_03.gif">
+      			 </CENTER></TD>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case5_04.gif">
+      			 </CENTER></TD>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case5_05.gif">
+      			 </CENTER></TD>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case5_06.gif">
+      			 </CENTER></TD></TR>
+  <TR>
+    <TD colspan="5">
+      <CENTER>			&nbsp;			</CENTER></TD></TR></TBODY></TABLE>
+<TABLE border="0">
+  <TBODY>
+  <TR>
+    <TD width="200">
+      <CENTER>			Step 7<BR>			Inserting Node 100			 </CENTER></TD>
+    <TD width="200">
+      <CENTER>			Step 8<BR>			Inserting Node 5			 </CENTER></TD>
+    <TD width="200">
+      <CENTER>			Step 9<BR>			Inserting Node 15			 </CENTER></TD></TR>
+  <TR>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case5_07.gif">
+      			 </CENTER></TD>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case5_08.gif">
+      			 </CENTER></TD>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case5_09.gif">
+      			 </CENTER></TD></TR>
+  <TR>
+    <TD colspan="5">
+      <CENTER>			&nbsp;			</CENTER></TD></TR></TBODY>
+<TABLE border="0">
+  <TBODY>
+  <TR>
+    <TD width="300">
+      <CENTER>			Step 10<BR>			Inserting Node 30			 </CENTER></TD>
+    <TD width="300">
+      <CENTER>			Step 11<BR>			Inserting Node 45			 </CENTER></TD></TR>
+  <TR>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case5_10.gif">
+      			 </CENTER></TD>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case5_11.gif">
+      			 </CENTER></TD></TR>
+  <TR>
+    <TD colspan="5">
+      <CENTER>			&nbsp;			</CENTER></TD></TR></TBODY></TABLE>
+<TABLE border="0">
+  <TBODY>
+  <TR>
+    <TD width="250">
+      <CENTER>			Step 12a<BR>			Inserting Node 35			 </CENTER></TD>
+    <TD width="250">
+      <CENTER>			&nbsp;			</CENTER></TD>
+    <TD width="250">
+      <CENTER>			Step 12b<BR>			Double right rotation about 40
+			 </CENTER></TD></TR>
+  <TR>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case5_12a.gif">
+      			 </CENTER></TD>
+    <TD>
+      <CENTER>			Inserting Node 35<BR>			triggers the test of<BR>			Case 5 
+      resulting in a<BR>			double right rotation<BR>			about node 40. (Note<BR>
+      			this is actually first a<BR>			single left rotation about<BR>			40, 
+      followed by a single<BR>			right rotation about 40)			 </CENTER></TD>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case5_12b.gif">
+      			 </CENTER></TD></TR>
+  <TR>
+    <TD colspan="3">
+      <CENTER>			&nbsp;			</CENTER></TD></TR></TBODY></TABLE>
+<HR size="4">
+<B><BIG>Testing Case 6</BIG> - Ancestor.balanceFactor = 'R' and node inserted is
+	in the left subtree of ancestor's right child.</B> 
+<TABLE border="0">
+  <TBODY>
+  <TR>
+    <TD width="150">
+      <CENTER>			Step 1-2<BR></CENTER></TD>
+    <TD width="150">
+      <CENTER>			Step 3<BR>			Inserting Node 80			 </CENTER></TD>
+    <TD width="150">
+      <CENTER>			Step 4<BR>			Inserting Node 70			 </CENTER></TD>
+    <TD width="150">
+      <CENTER>			Step 5<BR>			Inserting Node 90			 </CENTER></TD></TR>
+  <TR>
+    <TD>
+      <CENTER>			Same as for Case 1			 </CENTER></TD>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case6_03.gif">
+      			 </CENTER></TD>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case6_04.gif">
+      			 </CENTER></TD>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case6_05.gif">
+      			 </CENTER></TD></TR>
+  <TR>
+    <TD colspan="5">
+      <CENTER>			&nbsp;			</CENTER></TD></TR></TBODY></TABLE>
+<TABLE border="0">
+  <TBODY>
+  <TR>
+    <TD width="200">
+      <CENTER>			Step 6a<BR>			Inserting Node 75			 </CENTER></TD>
+    <TD width="200">
+      <CENTER>			&nbsp;			</CENTER></TD>
+    <TD width="200">
+      <CENTER>			Step 6b<BR>			Double left rotation about 70			 </CENTER></TD></TR>
+  <TR>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case6_06a.gif">
+      			 </CENTER></TD>
+    <TD>
+      <CENTER>			Inserting Node 75<BR>			triggers the test of<BR>			Case 6 
+      resulting in a<BR>			double left rotation<BR>			about node 70. (Note<BR>
+      			this is actually first a<BR>			single right rotation about<BR>			70, 
+      followed by a single<BR>			left rotation about 70).<BR>			Node 50 is the 
+      ancestor.			 </CENTER></TD>
+    <TD>
+      <CENTER><IMG align="center" src="CS%20221_files/AVL_Case6_06b.gif">
+      			 </CENTER></TD></TR>
+  <TR>
+    <TD colspan="5">
+      <CENTER>			&nbsp;			</CENTER></TD></TR></TBODY></TABLE>
+<HR size="4">
+</BODY></HTML>
